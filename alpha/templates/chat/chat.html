@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Chat{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="users-list">
+        <h2>Users</h2>
+        <ul>
+            {% for user in users %}
+            <li class="user-item" data-user-id="{{ user.id }}">
+                {{ user.username }}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="chat-box">
+        <div id="chat-header">
+            <h3>Chat with <span id="selected-user">No user selected</span></h3>
+        </div>
+        
+        <div id="messages" class="messages">
+            
+        </div>
+        
+        <div class="message-input">
+            <input type="text" id="message-text" placeholder="Type your message...">
+            <button id="send-button" disabled>Send</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var socket = io();
+        var currentReceiverId = null;
+        var messageInput = document.getElementById('message-text');
+        var sendButton = document.getElementById('send-button');
+        var messagesDiv = document.getElementById('messages');
+        var selectedUserSpan = document.getElementById('selected-user');
+
+        // Conexão socket.io
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            
+            socket.emit('join', {room: '{{ current_user.id }}'});
+        });
+
+        
+        socket.on('receive_message', function(data) {
+            addMessage(data);
+        });
+
+       
+        socket.on('status', function(data) {
+            addStatusMessage(data.message);
+        });
+
+      
+        socket.on('error', function(data) {
+            addErrorMessage(data.message);
+        });
+
+       
+        document.querySelectorAll('.user-item').forEach(function(userItem) {
+            userItem.addEventListener('click', function() {
+                currentReceiverId = this.dataset.userId;
+                selectedUserSpan.textContent = this.textContent;
+                sendButton.disabled = false;
+                
+               
+                messagesDiv.innerHTML = '';
+                
+               
+                document.querySelectorAll('.user-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                this.classList.add('selected');
+            });
+        });
+
+        
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            var message = messageInput.value.trim();
+            if (message && currentReceiverId) {
+                socket.emit('send_message', {
+                    receiver_id: currentReceiverId,
+                    message: message
+                });
+                messageInput.value = '';
+            }
+        }
+
+        function addMessage(data) {
+            var messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + 
+                (data.username === '{{ current_user.username }}' ? 'sent' : 'received');
+            messageDiv.innerHTML = `
+                <span class="username">${data.username}</span>
+                <span class="content">${data.message}</span>
+                <span class="timestamp">${data.timestamp}</span>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addStatusMessage(message) {
+            var statusDiv = document.createElement('div');
+            statusDiv.className = 'status-message';
+            statusDiv.textContent = message;
+            messagesDiv.appendChild(statusDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addErrorMessage(message) {
+            var errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            messagesDiv.appendChild(errorDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    });
+</script>
+{% endblock %}
